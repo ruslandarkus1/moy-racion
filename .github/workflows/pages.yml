@@ -1,0 +1,33 @@
+name: Publish website
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Extract source
+        run: python -m zipfile -e legkost-github.zip extracted
+      - name: Build website
+        run: python extracted/tools/build_pages.py --base /moy-racion/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: extracted/web
+      - uses: actions/deploy-pages@v4
+        id: deploy
