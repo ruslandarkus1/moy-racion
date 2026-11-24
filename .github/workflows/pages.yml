@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
 permissions:
   contents: read
   pages: write
@@ -24,10 +26,30 @@ jobs:
       - name: Extract source
         run: python -m zipfile -e legkost-github.zip extracted
       - name: Build website
-        run: python extracted/tools/build_pages.py --base /moy-racion/
+        run: |
+          python extracted/tools/test_collect_offers.py
+          python extracted/tools/collect_offers.py --output extracted/source/public/local/kazan-offers.json
+          python extracted/tools/build_pages.py --base /moy-racion/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: extracted/web
       - uses: actions/deploy-pages@v4
         id: deploy
+      - name: Verify published prices
+        run: |
+          python - <<'PY'
+          import json, time, urllib.request
+          url = 'https://ruslandarkus1.github.io/moy-racion/local/kazan-offers.json'
+          for attempt in range(8):
+              try:
+                  with urllib.request.urlopen(url + '?check=' + str(time.time_ns()), timeout=20) as response:
+                      feed = json.load(response)
+                  assert feed['schema'] == 1 and feed['city'] == 'Казань'
+                  assert len(feed['stores']) == 13
+                  print('Published price feed verified:', len(feed['offers']), 'offers;', feed['checkedAt'])
+                  break
+              except Exception:
+                  if attempt == 7: raise
+                  time.sleep(5)
+          PY
